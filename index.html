@@ -1,0 +1,647 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>麻雀卓管理</title>
+  <style>
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin:0; background:#f3f4f6; color:#111; }
+    header { position:sticky; top:0; background:#111; color:#fff; padding:12px; z-index:10; }
+    h1 { font-size:20px; margin:0 0 10px; }
+    nav { display:flex; gap:8px; flex-wrap:wrap; }
+    nav button { background:#333; color:#fff; border:1px solid #555; border-radius:999px; padding:8px 12px; }
+    nav button.active { background:#fff; color:#111; }
+    main { padding:14px; max-width:1380px; margin:auto; }
+    .bar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:12px; }
+    input, select, button { font-size:16px; padding:8px; border-radius:8px; border:1px solid #ccc; }
+    button { background:#111; color:#fff; cursor:pointer; }
+    button.secondary { background:#fff; color:#111; }
+    button.danger { background:#b00020; color:#fff; }
+    button.mini { font-size:13px; padding:5px 8px; white-space:nowrap; }
+    .hidden { display:none !important; }
+    .panel, .game-block { background:#fff; border-radius:16px; padding:12px; margin-bottom:16px; box-shadow:0 2px 8px rgba(0,0,0,.08); }
+    .table-page-title { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+    .table-page-title h2 { margin:0; font-size:22px; }
+    .block-title { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
+    .block-title h3 { margin:0; font-size:17px; }
+    .scroll { overflow:auto; }
+    table { border-collapse:collapse; width:100%; min-width:1120px; }
+    th, td { border:1px solid #ddd; padding:6px; text-align:center; }
+    th { background:#eee; }
+    td input, td select { width:100%; box-sizing:border-box; border:0; padding:6px; text-align:center; background:transparent; }
+    td input:focus, td select:focus { outline:2px solid #111; background:#fffbe6; }
+    .rank { width:90px; }
+    .time { width:105px; }
+    .player { width:150px; }
+    .action { width:130px; }
+    .small { font-size:12px; color:#666; }
+    .status { margin-left:auto; font-size:14px; color:#333; }
+    .person-table { min-width:1160px; }
+    .person-table td:first-child { font-weight:bold; text-align:left; }
+    .add-box { background:#fafafa; border:1px solid #ddd; border-radius:12px; padding:12px; margin-bottom:12px; }
+    .visit { font-size:12px; color:#333; max-width:300px; white-space:normal; text-align:left; }
+    .pill { display:inline-block; background:#eee; padding:3px 7px; border-radius:999px; margin:2px; }
+    .table-tabs { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+    .table-tabs button { min-width:70px; }
+    .summary-cards { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px; margin-bottom:12px; }
+    .summary-card { background:#fafafa; border:1px solid #ddd; border-radius:12px; padding:10px; }
+    .summary-card .label { font-size:12px; color:#666; }
+    .summary-card .num { font-size:22px; font-weight:700; margin-top:2px; }
+
+    #loadingOverlay {
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,.35);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      z-index:9999;
+    }
+    .loadingBox {
+      background:#fff;
+      border-radius:16px;
+      padding:22px 26px;
+      min-width:180px;
+      text-align:center;
+      box-shadow:0 8px 30px rgba(0,0,0,.25);
+    }
+    .spinner {
+      width:38px;
+      height:38px;
+      border:4px solid #ddd;
+      border-top-color:#111;
+      border-radius:50%;
+      animation:spin .8s linear infinite;
+      margin:0 auto 10px;
+    }
+    @keyframes spin { to { transform:rotate(360deg); } }
+
+    @media (max-width:700px){
+      main{padding:10px;}
+      input,select,button{font-size:14px;}
+      .table-page-title h2{font-size:20px;}
+      button.mini { font-size:12px; padding:5px 6px; }
+    }
+  </style>
+</head>
+<body>
+<div id="loadingOverlay" class="hidden">
+  <div class="loadingBox">
+    <div class="spinner"></div>
+    <div id="loadingText">読み込み中...</div>
+  </div>
+</div>
+
+<header>
+  <h1>麻雀卓管理</h1>
+  <nav>
+    <button id="tab-table" class="active" onclick="showPage('table')">卓管理</button>
+    <button id="tab-customers" onclick="showPage('customers')">お客様</button>
+    <button id="tab-members" onclick="showPage('members')">メンバー</button>
+  </nav>
+</header>
+
+<main>
+  <section id="page-table">
+    <div class="bar">
+      <label>日付 <input id="date" type="date"></label>
+      <button onclick="loadAll()">読み込み</button>
+      <button onclick="saveGames()">保存</button>
+      <button class="secondary" onclick="newDay()">新しい日付で開始</button>
+      <span id="status" class="status"></span>
+    </div>
+
+    <div class="table-tabs">
+      <button id="tableBtn1" class="active" onclick="showTable(1)">1卓</button>
+      <button id="tableBtn2" onclick="showTable(2)">2卓</button>
+      <button id="tableBtn3" onclick="showTable(3)">3卓</button>
+      <button id="tableBtn4" onclick="showTable(4)">4卓</button>
+      <button id="tableBtn5" onclick="showTable(5)">5卓</button>
+      <button id="tableBtn6" onclick="showTable(6)">6卓</button>
+    </div>
+
+    <p class="small">各卓40ゲーム分。各行の「前ゲーム継続」でP1/P2/P3をコピー。「今の時刻」で終了時刻を自動入力します。</p>
+    <div id="tablePage"></div>
+  </section>
+
+  <section id="page-customers" class="hidden">
+    <div class="panel">
+      <h2>お客様</h2>
+      <p class="small">登録したお客様は日付を変えても残ります。成績・来店記録・平均ゲーム時間は過去データから自動集計します。</p>
+
+      <div class="add-box">
+        <div class="bar">
+          <input id="customerName" placeholder="お客様名を入力">
+          <button onclick="addCustomer()">追加</button>
+          <button class="secondary" onclick="loadAll()">再読み込み</button>
+        </div>
+      </div>
+
+      <div class="summary-cards" id="customerSummary"></div>
+
+      <div class="scroll">
+        <table class="person-table">
+          <thead>
+            <tr>
+              <th>名前</th>
+              <th>ゲーム数</th>
+              <th>1着率</th>
+              <th>2着率</th>
+              <th>3着率</th>
+              <th>平均ゲーム時間</th>
+              <th>来店回数</th>
+              <th>最終来店</th>
+              <th>来店記録</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="customerStats"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="page-members" class="hidden">
+    <div class="panel">
+      <h2>メンバー</h2>
+      <p class="small">メンバーA〜Zも同じ方式で、参加した日だけ記録します。</p>
+
+      <div class="summary-cards" id="memberSummary"></div>
+
+      <div class="scroll">
+        <table class="person-table">
+          <thead>
+            <tr>
+              <th>名前</th>
+              <th>ゲーム数</th>
+              <th>1着率</th>
+              <th>2着率</th>
+              <th>3着率</th>
+              <th>平均ゲーム時間</th>
+              <th>参加日数</th>
+              <th>最終参加</th>
+              <th>参加日記録</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="memberStats"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+const TABLE_COUNT = 6;
+const GAME_COUNT = 40;
+const MEMBERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+const GAS_URL = "https://script.google.com/macros/s/AKfycby7eRamA8kWd5G-nisBH9GUfNELXtyxgCM2k5a0cBICY4Oe6wBGtoqWHaOTPripaqbYIw/exec";
+
+let currentTable = 1;
+let data = {};
+let customers = [];
+let allGames = [];
+
+function todayStr(){
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function nowTimeStr(){
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+
+function showLoading(text="読み込み中..."){
+  document.getElementById("loadingText").textContent = text;
+  document.getElementById("loadingOverlay").classList.remove("hidden");
+}
+
+function hideLoading(){
+  document.getElementById("loadingOverlay").classList.add("hidden");
+}
+
+function blankRow(tableNo, gameNo){
+  return { date: document.getElementById("date").value || todayStr(), tableNo, gameNo, p1:"", p2:"", p3:"", endTime:"", first:"", second:"", third:"", memo:"" };
+}
+
+function initData(){
+  data = {};
+  for(let t=1;t<=TABLE_COUNT;t++){
+    data[t] = [];
+    for(let g=1;g<=GAME_COUNT;g++) data[t].push(blankRow(t,g));
+  }
+}
+
+function playerOptions(selected=""){
+  const all = [
+    ...customers.map(c => ({label:`客：${c}`, value:c})),
+    ...MEMBERS.map(m => ({label:`メンバー：${m}`, value:m}))
+  ];
+  let html = `<option value="">選択</option>`;
+  all.forEach(p => html += `<option value="${esc(p.value)}" ${p.value===selected?"selected":""}>${esc(p.label)}</option>`);
+  if(selected && !all.some(p => p.value === selected)) html += `<option value="${esc(selected)}" selected>${esc(selected)}（未登録）</option>`;
+  return html;
+}
+
+function render(){
+  renderPersonStats();
+  renderCurrentTable();
+}
+
+function renderCurrentTable(){
+  const wrap = document.getElementById("tablePage");
+  const t = currentTable;
+
+  wrap.innerHTML = `
+    <section class="panel">
+      <div class="table-page-title">
+        <h2>${t}卓</h2>
+        <span class="small">20ゲーム表 × 2</span>
+      </div>
+      ${gameBlockHtml(t, 1, 1, 20)}
+      ${gameBlockHtml(t, 2, 21, 40)}
+    </section>
+  `;
+}
+
+function gameBlockHtml(t, blockNo, start, end){
+  const rows = data[t].slice(start-1, end);
+  const title = blockNo === 1 ? "1〜20ゲーム" : "21〜40ゲーム";
+  return `
+    <div class="game-block">
+      <div class="block-title">
+        <h3>${title}</h3>
+      </div>
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>G</th>
+              <th class="action">継続</th>
+              <th class="player">P1</th><th class="player">P2</th><th class="player">P3</th>
+              <th class="time">終了時刻</th>
+              <th class="action">時刻</th>
+              <th class="rank">1着</th><th class="rank">2着</th><th class="rank">3着</th>
+              <th>メモ</th>
+            </tr>
+          </thead>
+          <tbody>${rows.map((r,idx)=>rowHtml(t,start-1+idx,r)).join("")}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function rowHtml(t,i,r){
+  const canCopy = i > 0;
+  return `<tr>
+    <td>${r.gameNo}</td>
+    <td>${canCopy ? `<button class="mini secondary" onclick="copyPreviousRow(${t},${i})">前ゲーム継続</button>` : `<span class="small">-</span>`}</td>
+    ${["p1","p2","p3"].map(k=>`<td><select onchange="setVal(${t},${i},'${k}',this.value)">${playerOptions(r[k])}</select></td>`).join("")}
+    <td><input type="time" value="${esc(r.endTime)}" onchange="setVal(${t},${i},'endTime',this.value)"></td>
+    <td><button class="mini" onclick="setNowTime(${t},${i})">今の時刻</button></td>
+    ${["first","second","third"].map(k=>`<td><select onchange="setVal(${t},${i},'${k}',this.value)">${rankOptions(r,k)}</select></td>`).join("")}
+    <td><input value="${esc(r.memo)}" onchange="setVal(${t},${i},'memo',this.value)"></td>
+  </tr>`;
+}
+
+function rankOptions(r, key){
+  const players = [r.p1, r.p2, r.p3].filter(Boolean);
+  let html = `<option value="">選択</option>`;
+  players.forEach(p => html += `<option value="${esc(p)}" ${r[key]===p?"selected":""}>${esc(p)}</option>`);
+  if(r[key] && !players.includes(r[key])) html += `<option value="${esc(r[key])}" selected>${esc(r[key])}</option>`;
+  return html;
+}
+
+function setVal(t,i,k,v){
+  data[t][i][k] = v;
+  if(["p1","p2","p3"].includes(k)) renderCurrentTable();
+}
+
+function setNowTime(t,i){
+  data[t][i].endTime = nowTimeStr();
+  renderCurrentTable();
+}
+
+function copyPreviousRow(t,i){
+  if(i <= 0) return;
+  const prev = data[t][i-1];
+  const cur = data[t][i];
+  cur.p1 = prev.p1;
+  cur.p2 = prev.p2;
+  cur.p3 = prev.p3;
+  renderCurrentTable();
+}
+
+function showTable(t){
+  currentTable = t;
+  for(let i=1;i<=TABLE_COUNT;i++){
+    document.getElementById(`tableBtn${i}`).classList.toggle("active", i === t);
+  }
+  renderCurrentTable();
+  window.scrollTo({top:0, behavior:"smooth"});
+}
+
+function newDay(){
+  document.getElementById("date").value = todayStr();
+  initData();
+  render();
+  setStatus("新しい日付で開始しました。お客様登録と過去記録は消えません。");
+}
+
+function checkGas(){
+  if(GAS_URL.includes("PASTE_YOUR")){
+    alert("index.html内のGAS_URLにApps ScriptのWebアプリURLを貼ってください。");
+    return false;
+  }
+  return true;
+}
+
+async function saveGames(){
+  if(!checkGas()) return;
+  showLoading("保存中...");
+  setStatus("保存中...");
+  try {
+    const rows = [];
+    Object.values(data).forEach(arr => arr.forEach(r => rows.push({...r, date: document.getElementById("date").value})));
+    const res = await fetch(GAS_URL, { method:"POST", body: JSON.stringify({ action:"saveGames", date:document.getElementById("date").value, rows }) });
+    const json = await res.json();
+    setStatus(json.ok ? "保存しました" : "保存失敗");
+    await loadAll(false);
+  } catch(e) {
+    console.error(e);
+    setStatus("保存エラー");
+    alert("保存に失敗しました。通信状態やApps ScriptのURLを確認してください。");
+  } finally {
+    hideLoading();
+  }
+}
+
+async function loadGames(){
+  const date = document.getElementById("date").value;
+  const res = await fetch(`${GAS_URL}?action=games&date=${encodeURIComponent(date)}`);
+  const json = await res.json();
+  initData();
+  if(json.rows && json.rows.length){
+    json.rows.forEach(r=>{
+      const t = Number(r.tableNo), g = Number(r.gameNo);
+      if(data[t] && data[t][g-1]) data[t][g-1] = r;
+    });
+  }
+}
+
+async function loadAllGames(){
+  const res = await fetch(`${GAS_URL}?action=allGames`);
+  const json = await res.json();
+  allGames = json.rows || [];
+}
+
+async function loadCustomers(){
+  const res = await fetch(`${GAS_URL}?action=customers`);
+  const json = await res.json();
+  customers = json.customers || [];
+}
+
+async function loadAll(show=true){
+  if(!checkGas()) return;
+  if(show) showLoading("読み込み中...");
+  setStatus("読み込み中...");
+  try {
+    await loadCustomers();
+    await loadGames();
+    await loadAllGames();
+    render();
+    setStatus("読み込みました");
+  } catch(e) {
+    console.error(e);
+    setStatus("読み込みエラー");
+    alert("読み込みに失敗しました。通信状態やApps ScriptのURLを確認してください。");
+  } finally {
+    if(show) hideLoading();
+  }
+}
+
+async function addCustomer(){
+  if(!checkGas()) return;
+  const input = document.getElementById("customerName");
+  const name = input.value.trim();
+  if(!name) return alert("お客様名を入力してください。");
+
+  showLoading("登録中...");
+  try {
+    const res = await fetch(GAS_URL, { method:"POST", body: JSON.stringify({ action:"addCustomer", name }) });
+    const json = await res.json();
+    if(json.ok){
+      input.value = "";
+      await loadAll(false);
+      setStatus("お客様を追加しました。日付を変えても残ります。");
+    } else {
+      alert(json.error || "追加に失敗しました。");
+    }
+  } catch(e) {
+    console.error(e);
+    alert("登録に失敗しました。");
+  } finally {
+    hideLoading();
+  }
+}
+
+async function deleteCustomer(name){
+  if(!checkGas()) return;
+  if(!confirm(`${name} をお客様名簿から削除しますか？\n過去のゲーム記録・成績データ自体は消えません。`)) return;
+
+  showLoading("削除中...");
+  try {
+    const res = await fetch(GAS_URL, { method:"POST", body: JSON.stringify({ action:"deleteCustomer", name }) });
+    const json = await res.json();
+    if(json.ok){
+      await loadAll(false);
+      setStatus("お客様名簿から削除しました");
+    } else {
+      alert(json.error || "削除に失敗しました");
+    }
+  } catch(e) {
+    console.error(e);
+    alert("削除に失敗しました。");
+  } finally {
+    hideLoading();
+  }
+}
+
+function isPlayedRow(r){
+  return r && r.date && (r.p1 || r.p2 || r.p3);
+}
+
+function timeToMin(t){
+  if(!t || !String(t).includes(":")) return null;
+  const [h,m] = String(t).split(":").map(Number);
+  if(Number.isNaN(h) || Number.isNaN(m)) return null;
+  return h * 60 + m;
+}
+
+function diffMinutes(prevTime, curTime){
+  const a = timeToMin(prevTime);
+  const b = timeToMin(curTime);
+  if(a === null || b === null) return null;
+  let d = b - a;
+  if(d < 0) d += 24 * 60;
+  if(d <= 0 || d > 180) return null;
+  return d;
+}
+
+function gameDurationForRow(row){
+  const t = Number(row.tableNo);
+  const g = Number(row.gameNo);
+  if(!t || !g || !row.endTime) return null;
+
+  const sameDateTable = allGames
+    .filter(r => String(r.date) === String(row.date) && Number(r.tableNo) === t)
+    .sort((a,b) => Number(a.gameNo) - Number(b.gameNo));
+
+  const idx = sameDateTable.findIndex(r => Number(r.gameNo) === g);
+  if(idx <= 0) return null;
+
+  const prev = sameDateTable[idx - 1];
+  if(!prev || !prev.endTime) return null;
+
+  return diffMinutes(prev.endTime, row.endTime);
+}
+
+function calcStats(name){
+  const stat = { games:0, first:0, second:0, third:0, dates:new Set(), totalMinutes:0, durationCount:0 };
+
+  allGames.forEach(r => {
+    if(!isPlayedRow(r)) return;
+    const players = [r.p1, r.p2, r.p3].filter(Boolean);
+    if(players.includes(name)){
+      stat.games++;
+      if(r.first === name) stat.first++;
+      if(r.second === name) stat.second++;
+      if(r.third === name) stat.third++;
+      stat.dates.add(String(r.date));
+
+      const minutes = gameDurationForRow(r);
+      if(minutes !== null){
+        stat.totalMinutes += minutes;
+        stat.durationCount++;
+      }
+    }
+  });
+
+  return stat;
+}
+
+function avgTimeText(s){
+  if(!s.durationCount) return "-";
+  return `${Math.round(s.totalMinutes / s.durationCount)}分`;
+}
+
+function pct(n, total){
+  if(!total) return "0%";
+  return `${Math.round((n / total) * 1000) / 10}%`;
+}
+
+function sortedDates(dates){
+  return Array.from(dates).sort().reverse();
+}
+
+function latestDate(dates){
+  const arr = sortedDates(dates);
+  return arr.length ? arr[0] : "-";
+}
+
+function datePills(dates){
+  const arr = sortedDates(dates);
+  if(!arr.length) return `<span class="small">記録なし</span>`;
+  return arr.slice(0, 12).map(d => `<span class="pill">${esc(d)}</span>`).join("") + (arr.length > 12 ? `<span class="pill">他${arr.length-12}日</span>` : "");
+}
+
+function personRow(name, type){
+  const s = calcStats(name);
+  const action = type === "customer"
+    ? `<button class="danger" onclick="deleteCustomer('${escJs(name)}')">削除</button>`
+    : `<span class="small">固定</span>`;
+
+  return `<tr>
+    <td>${esc(name)}</td>
+    <td>${s.games}</td>
+    <td>${pct(s.first, s.games)}</td>
+    <td>${pct(s.second, s.games)}</td>
+    <td>${pct(s.third, s.games)}</td>
+    <td>${avgTimeText(s)}</td>
+    <td>${s.dates.size}</td>
+    <td>${esc(latestDate(s.dates))}</td>
+    <td class="visit">${datePills(s.dates)}</td>
+    <td>${action}</td>
+  </tr>`;
+}
+
+function totalStats(names){
+  let totalGames = 0;
+  let visitDates = new Set();
+  let totalMinutes = 0;
+  let durationCount = 0;
+
+  names.forEach(name => {
+    const s = calcStats(name);
+    totalGames += s.games;
+    totalMinutes += s.totalMinutes;
+    durationCount += s.durationCount;
+    s.dates.forEach(d => visitDates.add(d));
+  });
+
+  return { count:names.length, totalGames, activeDays:visitDates.size, avg: durationCount ? Math.round(totalMinutes / durationCount) : "-" };
+}
+
+function renderSummary(id, names, typeLabel){
+  const el = document.getElementById(id);
+  if(!el) return;
+  const s = totalStats(names);
+  el.innerHTML = `
+    <div class="summary-card"><div class="label">${typeLabel}登録数</div><div class="num">${s.count}</div></div>
+    <div class="summary-card"><div class="label">累計ゲーム参加数</div><div class="num">${s.totalGames}</div></div>
+    <div class="summary-card"><div class="label">記録がある日数</div><div class="num">${s.activeDays}</div></div>
+    <div class="summary-card"><div class="label">平均ゲーム時間</div><div class="num">${s.avg === "-" ? "-" : s.avg + "分"}</div></div>
+  `;
+}
+
+function renderPersonStats(){
+  const customerBody = document.getElementById("customerStats");
+  const memberBody = document.getElementById("memberStats");
+
+  renderSummary("customerSummary", customers, "お客様");
+  renderSummary("memberSummary", MEMBERS, "メンバー");
+
+  if(customerBody){
+    customerBody.innerHTML = customers.length
+      ? customers.map(c => personRow(c, "customer")).join("")
+      : `<tr><td colspan="10" class="small">まだ登録されているお客様はいません。</td></tr>`;
+  }
+  if(memberBody){
+    memberBody.innerHTML = MEMBERS.map(m => personRow(m, "member")).join("");
+  }
+}
+
+function showPage(page){
+  ["table","customers","members"].forEach(p=>{
+    document.getElementById(`page-${p}`).classList.toggle("hidden", p !== page);
+    document.getElementById(`tab-${p}`).classList.toggle("active", p === page);
+  });
+  renderPersonStats();
+}
+
+function esc(s){
+  return String(s ?? "").replaceAll("&","&amp;").replaceAll('"',"&quot;").replaceAll("<","&lt;").replaceAll(">","&gt;");
+}
+function escJs(s){
+  return String(s ?? "").replaceAll("\\","\\\\").replaceAll("'","\\'");
+}
+function setStatus(msg){ document.getElementById("status").textContent = msg; }
+
+document.getElementById("date").value = todayStr();
+initData();
+render();
+</script>
+</body>
+</html>
