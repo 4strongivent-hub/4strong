@@ -503,7 +503,7 @@
     const MEMBERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
     // ここにApps ScriptのWebアプリURLを貼る
-    const GAS_URL = "https://script.google.com/macros/s/AKfycbwbgTnh34hwnqKW4ztKRpWWKt0T2JwwLKKwQCflEeamt6PT-sml28HNcr2vWUwgs6r6GA/exec";
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbz7LR6tXTLe_-SQxfFTNF_PTSSfmFj4SXTErjWyxam0LtX8Ph8iqkpZVgZ8DOCVlr7_Sw/exec";
 
     let currentTable = 1;
     let data = {};
@@ -693,21 +693,11 @@
     function rankOptions(row, key) {
       const players = [row.p1, row.p2, row.p3].filter(Boolean);
 
-      const chosen = {
-        first: row.first,
-        second: row.second,
-        third: row.third
-      };
-
       let html = `<option value="">選択</option>`;
 
       players.forEach(player => {
-        const usedElsewhere = Object.entries(chosen).some(([rank, name]) => rank !== key && name === player);
         const selected = row[key] === player;
-
-        if (!usedElsewhere || selected) {
-          html += `<option value="${esc(player)}" ${selected ? "selected" : ""}>${esc(player)}</option>`;
-        }
+        html += `<option value="${esc(player)}" ${selected ? "selected" : ""}>${esc(player)}</option>`;
       });
 
       if (row[key] && !players.includes(row[key])) {
